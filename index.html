@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, minimum-scale=1, maximum-scale=1, initial-scale=1, user-scalable=0"
+    />
+    <title>Облака дилеров</title>
+    <link rel="stylesheet" type="text/css" href="css/main.css" media="screen" />
+    <link href="img/favicon.png" rel="shortcut icon" />
+  </head>
+  <body>
+    <div class="top"></div>
+    <div class="filters">
+      <div class="filters__inner">
+        <select id="region-filter">
+          <option value="all">Регион</option>
+        </select>
+        <select disabled>
+          <option value="all">Квартал</option>
+        </select>
+        <select id="sector-filter">
+          <option value="all">Сектор</option>
+        </select>
+        <select id="dealer-filter">
+          <option value="all">Дилер</option>
+        </select>
+        <select id="event-filter">
+          <option value="all">Ключевое событие</option>
+        </select>
+      </div>
+    </div>
+    <div class="column">
+      <div class="title">
+        <h1 class="title__title">Производительность дилеров</h1>
+        <div class="tabs" id="quarters"></div>
+      </div>
+      <div id="graph-clouds" class="graph">
+        <!-- <div class="tooltip">
+					<h2 class="tooltip__title"></h3>
+					<div class="tooltip__value"></div>
+				</div> -->
+      </div>
+    </div>
+    <div class="footer"></div>
+  </body>
+  <script src="js/d3.min.js"></script>
+  <script src="js/dealersChart.js"></script>
+  <script src="js/app.js"></script>
+</html>
