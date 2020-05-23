@@ -7,10 +7,10 @@ const regionFilter = d3.select("#region-filter");
 const sectorFilter = d3.select("#sector-filter");
 const dealerFilter = d3.select("#dealer-filter");
 const eventFilter = d3.select("#event-filter");
+const quarters = d3.select("#quarters");
 
 // State
 var state = {
-  quarter: 0,
   region: "all",
   sector: "all",
   dealer: "all",
@@ -28,12 +28,12 @@ Promise.all([
     const animationTime = 1000;
 
     // Init chart and pass data from Q1 to it
-    var chart = dealersChart().data(data[0]).animationTime(animationTime);
+    var chart = dealersChart().data(data).animationTime(animationTime);
 
     d3.selectAll(".graph").call(chart);
 
     // Example of switching between quarters
-    d3.select("#quarters")
+    quarters
       .selectAll(".tabs__link")
       .data([1, 2, 3])
       .enter()
@@ -46,53 +46,48 @@ Promise.all([
       .duration(animationTime)
       .style("opacity", "1");
 
-    d3.select(".tabs__link").attr("class", "tabs__link tabs__link_selected");
+    quarters.selectAll(".tabs__link").on("click", function (d, i) {
+      quarters.selectAll(".tabs__link").attr("class", "tabs__link");
+      d3.select(this).attr("class", "tabs__link tabs__link_selected");
 
-    d3.selectAll(".tabs__link").on("click", function (d, i) {
-      state.quarter = i;
+      // Just pass new quarter
+      chart.switchQuarter(i);
 
-      var thisLink = d3.select(this);
-
-      if (thisLink.attr("class") != "tabs__link tabs__link_selected") {
-        d3.selectAll(".tabs__link").attr("class", "tabs__link");
-        thisLink.attr("class", "tabs__link tabs__link_selected");
-
-        // Pass new data and update chart
-        chart.data(selectData(data)).updateChart();
-      }
       d3.event.preventDefault();
     });
+
+    selectFirstQuarter();
 
     // Example of filtering
     initFilters(data[0]);
 
     regionFilter.on("change", function () {
-      state.quarter = 0;
       state.region = regionFilter.property("value");
 
-      // Pass new data and update axes and chart
-      chart.data(filterQuarterData(data[0])).updateChart();
+      // Update chart with new data
+      chart.update(filterData(data));
+      selectFirstQuarter();
     });
 
     sectorFilter.on("change", function () {
-      state.quarter = 0;
-      state.sector = sectorFilter.property("value");
+      // d3.selectAll(".tabs__link").attr("class", "tabs__link");
+      // d3.select(".tabs__link").attr("class", "tabs__link tabs__link_selected");
 
-      chart.data(filterQuarterData(data[0])).updateChart();
+      state.sector = sectorFilter.property("value");
+      chart.update(filterData(data));
+      selectFirstQuarter();
     });
 
     dealerFilter.on("change", function () {
-      state.quarter = 0;
       state.dealer = dealerFilter.property("value");
-
-      chart.data(filterQuarterData(data[0])).updateChart();
+      chart.update(filterData(data));
+      selectFirstQuarter();
     });
 
     eventFilter.on("change", function () {
-      state.quarter = 0;
       state.event = eventFilter.property("value");
-
-      chart.data(filterQuarterData(data[0])).updateChart();
+      chart.update(filterData(data));
+      selectFirstQuarter();
     });
   })
   .catch(function (err) {
@@ -146,6 +141,22 @@ function initFilters(data) {
     .text((d) => d);
 }
 
+// Filter all data depending on state
+function filterData(data) {
+  var newData = [];
+
+  // Filter data in first quarter
+  newData[0] = filterQuarterData(data[0]);
+
+  // Filter rest of the data (because sector and event changes in time)
+  for (i = 1; i < data.length; i++)
+    newData[i] = data[i].filter(
+      (dataParent) => newData[0].filter((d) => d.id == dataParent.id).length
+    );
+
+  return newData;
+}
+
 // Filter quarter data depending on state
 function filterQuarterData(data) {
   var newData = data;
@@ -165,14 +176,10 @@ function filterQuarterData(data) {
   return newData;
 }
 
-// Select filtered data in new quarter
-function selectData(data) {
-  var newData = data[state.quarter];
-  var firstQuarterData = filterQuarterData(data[0]);
-
-  newData = newData.filter(
-    (dd) => firstQuarterData.filter((d) => d.id == dd.id).length
-  );
-
-  return newData;
+// Just make first quarter tab active
+function selectFirstQuarter() {
+  quarters.selectAll(".tabs__link").attr("class", "tabs__link");
+  quarters
+    .select(".tabs__link")
+    .attr("class", "tabs__link tabs__link_selected");
 }

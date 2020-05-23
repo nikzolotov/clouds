@@ -3,7 +3,7 @@
  */
 
 function dealersChart() {
-  // Initial settings. Accessible through setters.
+  // Initial settings. Accessible through setters and getters.
   // TODO: update width
   var width = 1100,
     height = 440,
@@ -57,7 +57,8 @@ function dealersChart() {
   ];
 
   var data = [];
-  var gX, gY, gGridX, gGridY, gPoints;
+  var quarter = 0;
+  var gX, gY, gGridX, gGridY, gMean, gPoints;
 
   // Init x and y scales
   const x = d3.scaleLinear().range([margin.left, width - margin.right]);
@@ -115,11 +116,11 @@ function dealersChart() {
       //   svg.call(xAxisLabel);
       //   svg.call(yAxisLabel);
 
-      // Подписи секторов
-      // svg.selectAll(".sector").data(sectors).enter().call(sectorLabel);
+      // Create sector labels
+      svg.selectAll(".sector").data(sectors).enter().call(sectorLabel);
 
-      // Create group for mean values
-      //   const gmean = svg.append("g");
+      //Create group for mean values
+      gMean = svg.append("g");
 
       // Create group for points and labels
       //   const glabels = svg.append("g");
@@ -133,7 +134,7 @@ function dealersChart() {
 
   function updateChart() {
     // Update points
-    var points = gPoints.selectAll("path").data(data, (d) => d.id);
+    var points = gPoints.selectAll("path").data(data[quarter], (d) => d.id);
 
     points
       .exit()
@@ -166,24 +167,132 @@ function dealersChart() {
       .end();
     //   .then(showLabels);
 
-    return chart;
+    // Updata mean values lines
+    var meanX = gMean
+      .selectAll(".mean-x")
+      .data([d3.mean(data[quarter], (d) => d.sales)]);
+
+    var meanY = gMean
+      .selectAll(".mean-y")
+      .data([d3.mean(data[quarter], (d) => d.cost)]);
+
+    meanX
+      .enter()
+      .append("g")
+      .attr("class", "mean-x")
+      .attr("transform", (d) => `translate(${x(d)}, ${margin.top})`)
+      .attr("opacity", 0)
+      .call((g) =>
+        g
+          .append("line")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", 0)
+          .attr("y2", height - margin.bottom - margin.top)
+          .attr("stroke", "#000")
+          .attr("stroke-dasharray", "1 2")
+          .attr("opacity", 0.4)
+      )
+      .call((g) =>
+        g
+          .append("rect")
+          .attr("x", -14)
+          .attr("y", 7)
+          .attr("width", 28) // Нужно считать по длине текста
+          .attr("height", 16)
+          .attr("fill", "#FFF")
+      )
+      .call(
+        (g) =>
+          g
+            .append("text")
+            .attr("class", "axis-label")
+            .attr("x", 0)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            // .text((d) => digitsFormat(d))
+            .text((d) => d)
+        // .on("mouseover", meanXOver)
+        // .on("mouseout", meanOut)
+      )
+      .merge(meanX)
+      .transition()
+      .duration(animationTime)
+      .attr("transform", (d) => `translate(${x(d)}, ${margin.top})`)
+      .attr("opacity", 1)
+      .select("text")
+      .delay(animationTime)
+      .text((d) => d);
+    // .text((d) => digitsFormat(d));
+
+    meanY
+      .enter()
+      .append("g")
+      .attr("class", "mean-y")
+      .attr("transform", (d) => `translate(${margin.left}, ${y(d)})`)
+      .attr("opacity", 0)
+      .call((g) =>
+        g
+          .append("line")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", width - margin.left - margin.right)
+          .attr("y2", 0)
+          .attr("stroke", "#000")
+          .attr("stroke-dasharray", "1 2")
+          .attr("opacity", 0.4)
+      )
+      .call((g) =>
+        g
+          .append("rect")
+          .attr("x", width - margin.left - margin.right - 47)
+          .attr("y", -9)
+          .attr("width", 40) // Нужно считать по длине текста
+          .attr("height", 16)
+          .attr("fill", "#FFF")
+      )
+      .call(
+        (g) =>
+          g
+            .append("text")
+            .attr("class", "axis-label")
+            .attr("x", width - margin.left - margin.right - 10)
+            .attr("y", 4)
+            .attr("text-anchor", "end")
+            .text((d) => d)
+        // .text((d) => digitsFormat(d))
+        // .on("mouseover", meanYOver)
+        // .on("mouseout", meanOut)
+      )
+      .merge(meanY)
+      .transition()
+      .duration(animationTime)
+      .attr("transform", (d) => `translate(${margin.left}, ${y(d)})`)
+      .attr("opacity", 1)
+      .select("text")
+      .delay(animationTime)
+      .text((d) => d);
+    // .text((d) => digitsFormat(d));
   }
 
   function updateAxes() {
-    // Here we take contol out of d3 and make our own ticks and endpoints of the data
-    var xTicks = getSmartTicks(d3.max(data, (d) => d.sales));
-    var yTicks = getSmartTicks(d3.max(data, (d) => d.cost));
+    var maxX = d3.max(d3.merge(data), (d) => d.sales);
+    var maxY = d3.max(d3.merge(data), (d) => d.cost);
 
-    x.domain([0, xTicks.endPoint]);
-    y.domain([0, yTicks.endPoint]);
+    if (typeof maxX !== "undefined" && typeof maxY !== "undefined") {
+      // Here we take contol out of d3 and make our own ticks and endpoints of the data
+      var xTicks = getSmartTicks(maxX);
+      var yTicks = getSmartTicks(maxY);
 
-    // Update axes and grid
-    gX.transition().duration(animationTime).call(xAxis, xTicks.count);
-    gY.transition().duration(animationTime).call(yAxis, yTicks.count);
-    gGridX.transition().duration(animationTime).call(xGrid, xTicks.count);
-    gGridY.transition().duration(animationTime).call(yGrid, yTicks.count);
+      x.domain([0, xTicks.endPoint]);
+      y.domain([0, yTicks.endPoint]);
 
-    return chart;
+      // Update axes and grid
+      gX.transition().duration(animationTime).call(xAxis, xTicks.count);
+      gY.transition().duration(animationTime).call(yAxis, yTicks.count);
+      gGridX.transition().duration(animationTime).call(xGrid, xTicks.count);
+      gGridY.transition().duration(animationTime).call(yGrid, yTicks.count);
+    }
   }
 
   // Axes helper functions
@@ -218,6 +327,30 @@ function dealersChart() {
         .tickFormat("")
     );
 
+  const sectorLabel = (g) =>
+    g
+      .append("g")
+      .attr("class", "sector")
+      .attr("transform", (d) => `translate(${d.left},${d.top})`)
+      .style("opacity", "0")
+      .call((g) =>
+        g
+          .append("circle")
+          .attr("r", 10)
+          .attr("fill", (d) => d.color)
+      )
+      .call((g) =>
+        g
+          .append("text")
+          .attr("class", "sector__text")
+          .attr("dx", -4.5)
+          .attr("dy", 4.5)
+          .text((d) => d.name)
+      )
+      .transition()
+      .duration(animationTime)
+      .style("opacity", "1");
+
   function getSmartTicks(val) {
     // Base step between nearby two ticks
     var step = Math.pow(10, val.toString().length - 1);
@@ -239,8 +372,18 @@ function dealersChart() {
     };
   }
 
-  chart.updateChart = updateChart;
-  chart.updateAxes = updateAxes;
+  chart.update = function (newData) {
+    data = newData;
+    quarter = 0;
+
+    updateAxes();
+    updateChart();
+  };
+
+  chart.switchQuarter = function (value) {
+    quarter = value;
+    updateChart();
+  };
 
   chart.data = function (value) {
     if (!arguments.length) return data;
