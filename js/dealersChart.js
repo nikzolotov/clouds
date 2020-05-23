@@ -107,14 +107,15 @@ function dealersChart() {
         .attr("transform", "translate(" + margin.left + ",0)")
         .attr("stroke-opacity", 0.05);
 
-      //   svg
-      //     .append("rect")
-      //     .attr("width", 60)
-      //     .attr("height", 18)
-      //     .attr("fill", "#FFF");
+      svg
+        .append("rect")
+        .attr("width", 60)
+        .attr("height", 18)
+        .attr("fill", "#FFF");
 
-      //   svg.call(xAxisLabel);
-      //   svg.call(yAxisLabel);
+      // Create axis labels
+      svg.call(xAxisLabel);
+      svg.call(yAxisLabel);
 
       // Create sector labels
       svg.selectAll(".sector").data(sectors).enter().call(sectorLabel);
@@ -168,13 +169,8 @@ function dealersChart() {
     //   .then(showLabels);
 
     // Updata mean values lines
-    var meanX = gMean
-      .selectAll(".mean-x")
-      .data([d3.mean(data[quarter], (d) => d.sales)]);
-
-    var meanY = gMean
-      .selectAll(".mean-y")
-      .data([d3.mean(data[quarter], (d) => d.cost)]);
+    var meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
+    var meanY = gMean.selectAll(".mean-y").data([data[quarter].meanCost]);
 
     meanX
       .enter()
@@ -276,8 +272,18 @@ function dealersChart() {
   }
 
   function updateAxes() {
-    var maxX = d3.max(d3.merge(data), (d) => d.sales);
-    var maxY = d3.max(d3.merge(data), (d) => d.cost);
+    // If there's a few points mean values could be far greater
+    // So, add them to calculate maximums
+    var allData = d3.merge(data);
+    var sales = allData;
+    var costs = allData;
+
+    sales.push({ sales: data[0].meanSales * 2 });
+    costs.push({ cost: data[0].meanCost * 2 });
+
+    // Calculate maximums
+    var maxX = d3.max(sales, (d) => d.sales);
+    var maxY = d3.max(costs, (d) => d.cost);
 
     if (typeof maxX !== "undefined" && typeof maxY !== "undefined") {
       // Here we take contol out of d3 and make our own ticks and endpoints of the data
@@ -327,6 +333,33 @@ function dealersChart() {
         .tickFormat("")
     );
 
+  // Axis labels helper functions
+  const xAxisLabel = (g) =>
+    g
+      .append("text")
+      .attr("x", width)
+      .attr("y", height - 3)
+      .attr("class", "axis-label")
+      .attr("text-anchor", "end")
+      .attr("opacity", 0)
+      .text("Количество продаж, шт.")
+      .transition()
+      .duration(animationTime)
+      .attr("opacity", 1);
+
+  const yAxisLabel = (g) =>
+    g
+      .append("text")
+      .attr("x", 0)
+      .attr("y", 13)
+      .attr("class", "axis-label")
+      .attr("opacity", 0)
+      .text("Стоимость продажи, ₽")
+      .transition()
+      .duration(animationTime)
+      .attr("opacity", 1);
+
+  // Sector label helper function
   const sectorLabel = (g) =>
     g
       .append("g")
@@ -353,7 +386,7 @@ function dealersChart() {
 
   function getSmartTicks(val) {
     // Base step between nearby two ticks
-    var step = Math.pow(10, val.toString().length - 1);
+    var step = Math.pow(10, Math.trunc(val).toString().length - 1);
 
     // Modify steps either: 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000...
     if (val / step < 2) {

@@ -24,15 +24,18 @@ Promise.all([
   d3.csv("data/sales-q3.csv", (d) => parseData(d)),
 ])
   .then(function (data) {
+    prepareData(data);
+
     // To sync the appearance of tabs and graph
     const animationTime = 1000;
 
     // Init chart and pass data from Q1 to it
     var chart = dealersChart().data(data).animationTime(animationTime);
-
     d3.selectAll(".graph").call(chart);
 
     // Example of switching between quarters
+
+    // Create links. Assume that we have 3 quarters.
     quarters
       .selectAll(".tabs__link")
       .data([1, 2, 3])
@@ -59,6 +62,8 @@ Promise.all([
     selectFirstQuarter();
 
     // Example of filtering
+
+    // Fill filters with data
     initFilters(data[0]);
 
     regionFilter.on("change", function () {
@@ -70,9 +75,6 @@ Promise.all([
     });
 
     sectorFilter.on("change", function () {
-      // d3.selectAll(".tabs__link").attr("class", "tabs__link");
-      // d3.select(".tabs__link").attr("class", "tabs__link tabs__link_selected");
-
       state.sector = sectorFilter.property("value");
       chart.update(filterData(data));
       selectFirstQuarter();
@@ -105,6 +107,14 @@ function parseData(d) {
     cost: parseFloat(d.cost),
     sector: +d.sector,
   };
+}
+
+function prepareData(data) {
+  for (i = 0; i < data.length; i++) {
+    data[i].meanSales = d3.mean(data[i], (d) => d.sales);
+    data[i].meanCost = d3.mean(data[i], (d) => d.cost);
+  }
+  return data;
 }
 
 // Fill filters with options
@@ -145,14 +155,26 @@ function initFilters(data) {
 function filterData(data) {
   var newData = [];
 
+  // To save mean values after filtering
+  var sales = data[0].meanSales;
+  var cost = data[0].meanCost;
+
   // Filter data in first quarter
   newData[0] = filterQuarterData(data[0]);
+  newData[0].meanSales = sales;
+  newData[0].meanCost = cost;
 
   // Filter rest of the data (because sector and event changes in time)
-  for (i = 1; i < data.length; i++)
+  for (i = 1; i < data.length; i++) {
+    sales = data[i].meanSales;
+    cost = data[i].meanCost;
+
     newData[i] = data[i].filter(
       (dataParent) => newData[0].filter((d) => d.id == dataParent.id).length
     );
+    newData[i].meanSales = sales;
+    newData[i].meanCost = cost;
+  }
 
   return newData;
 }
