@@ -4,7 +4,6 @@
 
 function dealersChart() {
   // Initial settings. Accessible through setters and getters.
-  // TODO: update width
   var width = 1100,
     height = 440,
     margin = {
@@ -68,6 +67,7 @@ function dealersChart() {
   var data = [];
   var quarter = 0;
   var gX, gY, gGridX, gGridY, gMean, gPoints;
+  var tooltip, tooltipTitle, tooltipValue;
 
   // Init x and y scales
   const x = d3.scaleLinear().range([margin.left, width - margin.right]);
@@ -91,6 +91,11 @@ function dealersChart() {
         .attr("width", width)
         .attr("height", height)
         .attr("viewBox", [0, 0, width, height]);
+
+      // Create tooltip
+      tooltip = d3.select(this).append("div").attr("class", "tooltip");
+      tooltipTitle = tooltip.append("h2").attr("class", "tooltip__title");
+      tooltipValue = tooltip.append("div").attr("class", "tooltip__value");
 
       // Create group for the clouds
       // Order of the groups below is like z-index
@@ -160,9 +165,9 @@ function dealersChart() {
       .attr("transform", (d) => `translate(${x(d.sales)},${y(d.cost)})`)
       .attr("fill", (d) => color(d.sector))
       .attr("d", (d) => shape(d.sector))
-      //   .on("click", pointClick)
-      //   .on("mouseover", pointOver)
-      //   .on("mouseout", pointOut)
+      .on("click", pointClick)
+      .on("mouseover", pointOver)
+      .on("mouseout", pointOut)
       .merge(points)
       .attr("d", (d) => shape(d.sector))
       .transition()
@@ -207,17 +212,16 @@ function dealersChart() {
           .attr("height", 16)
           .attr("fill", "#FFF")
       )
-      .call(
-        (g) =>
-          g
-            .append("text")
-            .attr("class", "axis-label")
-            .attr("x", 0)
-            .attr("y", 20)
-            .attr("text-anchor", "middle")
-            .text((d) => digitsFormat(d))
-        // .on("mouseover", meanXOver)
-        // .on("mouseout", meanOut)
+      .call((g) =>
+        g
+          .append("text")
+          .attr("class", "axis-label")
+          .attr("x", 0)
+          .attr("y", 20)
+          .attr("text-anchor", "middle")
+          .text((d) => digitsFormat(d))
+          .on("mouseover", meanXOver)
+          .on("mouseout", meanOut)
       )
       .merge(meanX)
       .transition()
@@ -254,17 +258,16 @@ function dealersChart() {
           .attr("height", 16)
           .attr("fill", "#FFF")
       )
-      .call(
-        (g) =>
-          g
-            .append("text")
-            .attr("class", "axis-label")
-            .attr("x", width - margin.left - margin.right - 10)
-            .attr("y", 4)
-            .attr("text-anchor", "end")
-            .text((d) => digitsFormat(d))
-        // .on("mouseover", meanYOver)
-        // .on("mouseout", meanOut)
+      .call((g) =>
+        g
+          .append("text")
+          .attr("class", "axis-label")
+          .attr("x", width - margin.left - margin.right - 10)
+          .attr("y", 4)
+          .attr("text-anchor", "end")
+          .text((d) => digitsFormat(d))
+          .on("mouseover", meanYOver)
+          .on("mouseout", meanOut)
       )
       .merge(meanY)
       .transition()
@@ -397,6 +400,67 @@ function dealersChart() {
       .duration(animationTime)
       .style("opacity", "1");
 
+  // Event handlers
+  function pointClick(d) {
+    var point = d3.select(this),
+      position = "translate(" + x(d.sales) + "," + y(d.cost) + ")";
+
+    if (point.classed("point_selected"))
+      point.attr("transform", position).attr("class", "point");
+    else
+      point
+        .attr("transform", position + "scale(2)")
+        .attr("class", "point point_selected");
+  }
+
+  function pointOver(d) {
+    tooltip.attr(
+      "style",
+      `left: ${x(d.sales)}px; top: ${y(d.cost)}px; opacity: 1`
+    );
+
+    tooltipTitle.text(d.name);
+
+    tooltipValue.html(`<dl class="props">
+      <dt class="props__title">Стоимость продажи</dt><dd class="props__value">${digitsFormat(
+        d.cost - margin.right
+      )} ₽</dd>
+      <dt class="props__title">Количество продаж</dt><dd class="props__value">${
+        d.sales
+      } шт.</dd>
+      </div>`);
+  }
+
+  function pointOut(d) {
+    tooltip.attr("style", "opacity: 0");
+  }
+
+  function meanXOver(d) {
+    tooltip
+      .attr("class", "tooltip tooltip_compact")
+      .attr("style", `left: ${x(d) + 15}px; top: ${margin.top}px; opacity: 1`);
+
+    tooltipValue.text("Средняя стоимость продажи");
+  }
+
+  function meanYOver(d) {
+    tooltip
+      .attr("class", "tooltip tooltip_compact")
+      .attr(
+        "style",
+        `left: auto; right: ${margin.right + 10}px; top: ${
+          y(d) + 5
+        }px; opacity: 1`
+      );
+
+    tooltipValue.text("Среднее количество продаж");
+  }
+
+  function meanOut(d) {
+    tooltip.attr("class", "tooltip").attr("style", "opacity: 0");
+  }
+
+  // Calculate good ammount of ticks and endpoint for given value
   function getSmartTicks(val) {
     // Base step between nearby two ticks
     var step = Math.pow(10, Math.trunc(val).toString().length - 1);
@@ -418,6 +482,7 @@ function dealersChart() {
     };
   }
 
+  // Lifecycle methods
   chart.update = function (newData) {
     data = newData;
     quarter = 0;
@@ -431,6 +496,7 @@ function dealersChart() {
     updateChart();
   };
 
+  // Initial setters and getters
   chart.data = function (value) {
     if (!arguments.length) return data;
     data = value;
