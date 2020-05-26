@@ -56,6 +56,15 @@ function dealersChart() {
     },
   ];
 
+  // Digits formatting
+  const digitsFormat = d3
+    .formatLocale({
+      decimal: ",",
+      thousands: " ",
+      grouping: [3],
+    })
+    .format(",.0f");
+
   var data = [];
   var quarter = 0;
   var gX, gY, gGridX, gGridY, gMean, gPoints;
@@ -206,8 +215,7 @@ function dealersChart() {
             .attr("x", 0)
             .attr("y", 20)
             .attr("text-anchor", "middle")
-            // .text((d) => digitsFormat(d))
-            .text((d) => d)
+            .text((d) => digitsFormat(d))
         // .on("mouseover", meanXOver)
         // .on("mouseout", meanOut)
       )
@@ -218,8 +226,7 @@ function dealersChart() {
       .attr("opacity", 1)
       .select("text")
       .delay(animationTime)
-      .text((d) => d);
-    // .text((d) => digitsFormat(d));
+      .text((d) => digitsFormat(d));
 
     meanY
       .enter()
@@ -255,8 +262,7 @@ function dealersChart() {
             .attr("x", width - margin.left - margin.right - 10)
             .attr("y", 4)
             .attr("text-anchor", "end")
-            .text((d) => d)
-        // .text((d) => digitsFormat(d))
+            .text((d) => digitsFormat(d))
         // .on("mouseover", meanYOver)
         // .on("mouseout", meanOut)
       )
@@ -267,8 +273,7 @@ function dealersChart() {
       .attr("opacity", 1)
       .select("text")
       .delay(animationTime)
-      .text((d) => d);
-    // .text((d) => digitsFormat(d));
+      .text((d) => digitsFormat(d));
   }
 
   function updateAxes() {
@@ -304,14 +309,22 @@ function dealersChart() {
   // Axes helper functions
   const xAxis = (g, ticks) =>
     g.call(
-      d3.axisBottom(x).ticks(ticks, ",.0f").tickSize(0, 0).tickPadding(10)
-      // .tickFormat(formatXTick)
+      d3
+        .axisBottom(x)
+        .ticks(ticks, ",.0f")
+        .tickSize(0, 0)
+        .tickPadding(10)
+        .tickFormat((d) => digitsFormat(d))
     );
 
   const yAxis = (g, ticks) =>
     g.call(
-      d3.axisLeft(y).ticks(ticks).tickSize(0, 0).tickPadding(10)
-      // .tickFormat(formatYTick)
+      d3
+        .axisLeft(y)
+        .ticks(ticks)
+        .tickSize(0, 0)
+        .tickPadding(10)
+        .tickFormat((d) => (digitsFormat(d) === "0" ? "" : digitsFormat(d)))
     );
 
   // Grid helper functions
