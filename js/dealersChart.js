@@ -66,7 +66,7 @@ function dealersChart() {
 
   var data = [];
   var quarter = 0;
-  var gX, gY, gGridX, gGridY, gMean, gPoints;
+  var gX, gY, gGridX, gGridY, gMean, gLabels, gPoints;
   var tooltip, tooltipTitle, tooltipValue;
 
   // Init x and y scales
@@ -138,7 +138,7 @@ function dealersChart() {
       gMean = svg.append("g");
 
       // Create group for points and labels
-      //   const glabels = svg.append("g");
+      gLabels = svg.append("g");
       gPoints = svg.append("g");
 
       // Update chart with data from the first quarter
@@ -179,8 +179,34 @@ function dealersChart() {
       })
       .attr("fill", (d) => color(d.sector))
       .attr("opacity", 1)
-      .end();
-    //   .then(showLabels);
+      .end()
+      .then(showLabels);
+
+    // Add all labels and hide them
+    var labels = gLabels.selectAll(".label").data(data[quarter], (d) => d.id);
+
+    labels
+      .exit()
+      .transition()
+      .duration(animationTime / 2)
+      .attr("opacity", 0)
+      .remove();
+
+    labels
+      .enter()
+      .append("text")
+      .attr("class", "label")
+      .attr("dy", "0.3em")
+      .attr("x", (d) => x(d.sales) + 7)
+      .attr("y", (d) => y(d.cost))
+      .attr("opacity", 0)
+      .text((d) => d.name)
+      .merge(labels)
+      .attr("opacity", 0)
+      .transition()
+      .duration(animationTime)
+      .attr("x", (d) => x(d.sales) + 7)
+      .attr("y", (d) => y(d.cost));
 
     // Updata mean values lines
     var meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
@@ -479,6 +505,136 @@ function dealersChart() {
     return {
       endPoint: slicesCount * step,
       count: Math.min(10, slicesCount), //show max 10 ticks
+    };
+  }
+
+  // Show labels that do not overlap with others
+  function showLabels() {
+    let allPoints = d3.selectAll(".point");
+    let allLabels = d3.selectAll(".label");
+    let visibleLabels = d3.selectAll(".label_visible");
+
+    allLabels.attr("class", "label").attr("opacity", "0");
+
+    allLabels.each(function () {
+      var thisLabel = d3.select(this),
+        thisLabelBBox = this.getBBox(),
+        isOverlap = false;
+
+      allPoints.each(function () {
+        if (
+          getRectsOverlap(thisLabelBBox, getBBox(this)) &&
+          !d3.select(this).classed("point_selected")
+        )
+          isOverlap = true;
+      });
+
+      visibleLabels.each(function () {
+        if (getRectsOverlap(thisLabelBBox, this.getBBox())) isOverlap = true;
+      });
+
+      if (!isOverlap) {
+        thisLabel.attr("class", "label label_visible");
+        visibleLabels = d3.selectAll(".label_visible"); // подумать, как добавлять в выборку, а не заново выбирать
+      }
+    });
+
+    visibleLabels
+      .transition()
+      .duration(animationTime / 2)
+      .attr("opacity", "1");
+  }
+
+  function getRectsOverlap(l, r) {
+    l.left = l.x - labelPadding;
+    l.right = l.x + l.width + labelPadding;
+    l.top = l.y - labelPadding;
+    l.bottom = l.y + l.height + labelPadding;
+
+    r.left = r.x - labelPadding;
+    r.right = r.x + r.width + labelPadding;
+    r.top = r.y - labelPadding;
+    r.bottom = r.y + r.height + labelPadding;
+
+    return !(
+      l.left >= r.right ||
+      l.top >= r.bottom ||
+      l.right <= r.left ||
+      l.bottom <= r.top
+    );
+  }
+
+  /**
+   * @param {SVGElement} element - Element to get the bounding box for
+   * @param {boolean} [withoutTransforms=false] - If true, transforms will not be calculated
+   * @param {SVGElement} [toElement] - Element to calculate bounding box relative to
+   * @returns {SVGRect} Coordinates and dimensions of the real bounding box
+   */
+  function getBBox(element, withoutTransforms, toElement) {
+    var svg = element.ownerSVGElement;
+
+    if (!svg) {
+      return {
+        x: 0,
+        y: 0,
+        cx: 0,
+        cy: 0,
+        width: 0,
+        height: 0,
+      };
+    }
+
+    var r = element.getBBox();
+
+    if (withoutTransforms) {
+      return {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+        cx: r.x + r.width / 2,
+        cy: r.y + r.height / 2,
+      };
+    }
+
+    var p = svg.createSVGPoint();
+
+    var matrix = (toElement || svg)
+      .getScreenCTM()
+      .inverse()
+      .multiply(element.getScreenCTM());
+
+    p.x = r.x;
+    p.y = r.y;
+    var a = p.matrixTransform(matrix);
+
+    p.x = r.x + r.width;
+    p.y = r.y;
+    var b = p.matrixTransform(matrix);
+
+    p.x = r.x + r.width;
+    p.y = r.y + r.height;
+    var c = p.matrixTransform(matrix);
+
+    p.x = r.x;
+    p.y = r.y + r.height;
+    var d = p.matrixTransform(matrix);
+
+    var minX = Math.min(a.x, b.x, c.x, d.x);
+    var maxX = Math.max(a.x, b.x, c.x, d.x);
+    var minY = Math.min(a.y, b.y, c.y, d.y);
+    var maxY = Math.max(a.y, b.y, c.y, d.y);
+
+    var width = maxX - minX;
+    var height = maxY - minY;
+
+    return {
+      x: minX,
+      y: minY,
+      width: width,
+      height: height,
+      cx: minX + width / 2,
+      cy: minY + height / 2,
     };
   }
 
