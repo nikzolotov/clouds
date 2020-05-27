@@ -66,7 +66,7 @@ function dealersChart() {
 
   var data = [];
   var quarter = 0;
-  var gX, gY, gGridX, gGridY, gMean, gLabels, gPoints, gPointsAreas;
+  var gClouds, gX, gY, gGridX, gGridY, gMean, gLabels, gPoints, gPointsAreas;
   var tooltip, tooltipTitle, tooltipValue;
 
   // Init x and y scales
@@ -99,7 +99,7 @@ function dealersChart() {
 
       // Create group for the clouds
       // Order of the groups below is like z-index
-      //   const gclouds = svg.append("g");
+      gClouds = svg.append("g");
 
       // Create groups for X and Y axes
       gX = svg
@@ -149,15 +149,40 @@ function dealersChart() {
   }
 
   function updateChart() {
-    // Update points
-    var points = gPoints.selectAll("path").data(data[quarter], (d) => d.id);
+    // Update clouds
+    sectors.forEach(function (g, i) {
+      let cloudPoints = d3.polygonHull(
+        data[quarter]
+          .filter((d) => d.sector == i)
+          .map((d) => [x(d.sales), y(d.cost)])
+      );
 
-    points
-      .exit()
-      .transition()
-      .duration(animationTime / 2)
-      .attr("opacity", 0)
-      .remove();
+      let poly = gClouds.selectAll("#poly-" + i).data([cloudPoints]);
+
+      if (cloudPoints) {
+        poly
+          .enter()
+          .append("polygon")
+          .attr("id", "poly-" + i)
+          .attr("fill", g.bg)
+          .attr("stroke", g.bg)
+          .attr("stroke-width", 10)
+          .attr("stroke-linejoin", "round")
+          .merge(poly)
+          .attr("opacity", 0)
+          .transition()
+          .duration(animationTime)
+          .attr("points", (d) => d.map((d) => [d[0], d[1]].join(",")).join(" "))
+          .transition()
+          .duration(500)
+          .attr("opacity", 1);
+      } else {
+        poly.remove();
+      }
+    });
+
+    // Update points
+    let points = gPoints.selectAll("path").data(data[quarter], (d) => d.id);
 
     points
       .enter()
@@ -183,20 +208,27 @@ function dealersChart() {
       .end()
       .then(showLabels);
 
-    var delaunay = d3.Delaunay.from(
+    points
+      .exit()
+      .transition()
+      .duration(animationTime / 2)
+      .attr("opacity", 0)
+      .remove();
+
+    let delaunay = d3.Delaunay.from(
       data[quarter],
       (d) => x(d.sales),
       (d) => y(d.cost)
     );
 
-    var voronoi = delaunay.voronoi([
+    let voronoi = delaunay.voronoi([
       margin.left,
       margin.top,
       width - margin.right,
       height - margin.bottom,
     ]);
 
-    var cells = data[quarter].map((d, i) => [d, voronoi.cellPolygon(i)]);
+    let cells = data[quarter].map((d, i) => [d, voronoi.cellPolygon(i)]);
 
     // // Show voronoi cells and centroid angle
     // gPointsAreas.select("path").remove();
@@ -231,7 +263,7 @@ function dealersChart() {
         const py = y(d[0].cost);
         const [cx, cy] = d3.polygonCentroid(d[1]);
 
-        var angle = (Math.atan2(cy - py, cx - px) * 180) / Math.PI + 90;
+        let angle = (Math.atan2(cy - py, cx - px) * 180) / Math.PI + 90;
         if (angle < 0) angle += 360;
 
         d3.select(this).call(
@@ -252,8 +284,8 @@ function dealersChart() {
       .text((d) => d[0].name);
 
     // Updata mean values lines
-    var meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
-    var meanY = gMean.selectAll(".mean-y").data([data[quarter].meanCost]);
+    let meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
+    let meanY = gMean.selectAll(".mean-y").data([data[quarter].meanCost]);
 
     meanX
       .enter()
@@ -351,21 +383,21 @@ function dealersChart() {
   function updateAxes() {
     // If there's a few points mean values could be far greater
     // So, add them to calculate maximums
-    var allData = d3.merge(data);
-    var sales = allData;
-    var costs = allData;
+    let allData = d3.merge(data);
+    let sales = allData;
+    let costs = allData;
 
     sales.push({ sales: data[0].meanSales * 2 });
     costs.push({ cost: data[0].meanCost * 2 });
 
     // Calculate maximums
-    var maxX = d3.max(sales, (d) => d.sales);
-    var maxY = d3.max(costs, (d) => d.cost);
+    let maxX = d3.max(sales, (d) => d.sales);
+    let maxY = d3.max(costs, (d) => d.cost);
 
     if (typeof maxX !== "undefined" && typeof maxY !== "undefined") {
       // Here we take contol out of d3 and make our own ticks and endpoints of the data
-      var xTicks = getSmartTicks(maxX);
-      var yTicks = getSmartTicks(maxY);
+      let xTicks = getSmartTicks(maxX);
+      let yTicks = getSmartTicks(maxY);
 
       x.domain([0, xTicks.endPoint]);
       y.domain([0, yTicks.endPoint]);
