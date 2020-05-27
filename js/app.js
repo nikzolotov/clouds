@@ -50,11 +50,15 @@ Promise.all([
       .style("opacity", "1");
 
     quarters.selectAll(".tabs__link").on("click", function (d, i) {
-      quarters.selectAll(".tabs__link").attr("class", "tabs__link");
-      d3.select(this).attr("class", "tabs__link tabs__link_selected");
+      var thisLink = d3.select(this);
 
-      // Just pass new quarter
-      chart.switchQuarter(i);
+      if (thisLink.attr("class") !== "tabs__link tabs__link_selected") {
+        quarters.selectAll(".tabs__link").attr("class", "tabs__link");
+        thisLink.attr("class", "tabs__link tabs__link_selected");
+
+        // Just pass new quarter
+        chart.switchQuarter(i);
+      }
 
       d3.event.preventDefault();
     });

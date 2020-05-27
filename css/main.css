@@ -171,7 +171,6 @@ a {
 .label {
     font-size: 12px;
     cursor: default;
-    /*transition: opacity .5s ease-out;*/
     }
 .sector text {
     font-size: 13px;

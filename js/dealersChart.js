@@ -12,7 +12,7 @@ function dealersChart() {
       bottom: 46,
       left: 50,
     },
-    labelPadding = 1,
+    labelPadding = 4,
     animationTime = 1000;
 
   // Settings for sectors. Not accessible.
@@ -66,7 +66,7 @@ function dealersChart() {
 
   var data = [];
   var quarter = 0;
-  var gX, gY, gGridX, gGridY, gMean, gLabels, gPoints;
+  var gX, gY, gGridX, gGridY, gMean, gLabels, gPoints, gPointsAreas;
   var tooltip, tooltipTitle, tooltipValue;
 
   // Init x and y scales
@@ -131,15 +131,16 @@ function dealersChart() {
       svg.call(xAxisLabel);
       svg.call(yAxisLabel);
 
-      // Create sector labels
-      svg.selectAll(".sector").data(sectors).enter().call(sectorLabel);
-
       //Create group for mean values
       gMean = svg.append("g");
 
       // Create group for points and labels
+      gPointsAreas = svg.append("g");
       gLabels = svg.append("g");
       gPoints = svg.append("g");
+
+      // Create sector labels
+      svg.selectAll(".sector").data(sectors).enter().call(sectorLabel);
 
       // Update chart with data from the first quarter
       updateAxes();
@@ -182,31 +183,73 @@ function dealersChart() {
       .end()
       .then(showLabels);
 
-    // Add all labels and hide them
-    var labels = gLabels.selectAll(".label").data(data[quarter], (d) => d.id);
+    var delaunay = d3.Delaunay.from(
+      data[quarter],
+      (d) => x(d.sales),
+      (d) => y(d.cost)
+    );
 
-    labels
-      .exit()
-      .transition()
-      .duration(animationTime / 2)
-      .attr("opacity", 0)
-      .remove();
+    var voronoi = delaunay.voronoi([
+      margin.left,
+      margin.top,
+      width - margin.right,
+      height - margin.bottom,
+    ]);
 
-    labels
-      .enter()
-      .append("text")
+    var cells = data[quarter].map((d, i) => [d, voronoi.cellPolygon(i)]);
+
+    // // Show voronoi cells and centroid angle
+    // gPointsAreas.select("path").remove();
+    // gPointsAreas
+    //   .append("path")
+    //   .attr("fill", "#dfc")
+    //   .attr("stroke", "#ccc")
+    //   .attr("d", voronoi.render());
+
+    // gPointsAreas.select("g").remove();
+    // gPointsAreas
+    //   .append("g")
+    //   .attr("stroke", "orange")
+    //   .selectAll("path")
+    //   .data(cells)
+    //   .join("path")
+    //   .attr(
+    //     "d",
+    //     ([d, cell]) => `M${d3.polygonCentroid(cell)}L${x(d.sales)},${y(d.cost)}`
+    //   );
+
+    // Add labels based on Voronoi cells
+    gLabels
+      .selectAll("text")
+      .data(cells, (d) => d[0].id)
+      .join("text")
       .attr("class", "label")
-      .attr("dy", "0.3em")
-      .attr("x", (d) => x(d.sales) + 7)
-      .attr("y", (d) => y(d.cost))
       .attr("opacity", 0)
-      .text((d) => d.name)
-      .merge(labels)
-      .attr("opacity", 0)
-      .transition()
-      .duration(animationTime)
-      .attr("x", (d) => x(d.sales) + 7)
-      .attr("y", (d) => y(d.cost));
+      .each(function (d) {
+        // Orient label based on direction from point to ceneter of the Voronoi cell
+        const px = x(d[0].sales);
+        const py = y(d[0].cost);
+        const [cx, cy] = d3.polygonCentroid(d[1]);
+
+        var angle = (Math.atan2(cy - py, cx - px) * 180) / Math.PI + 90;
+        if (angle < 0) angle += 360;
+
+        d3.select(this).call(
+          angle >= 0 && angle < 90
+            ? orientLabel.topRight
+            : angle >= 90 && angle < 180
+            ? orientLabel.bottomRight
+            : angle >= 180 && angle < 270
+            ? orientLabel.bottomLeft
+            : orientLabel.topLeft
+        );
+      })
+      .attr("transform", (d) => `translate(${x(d[0].sales)},${y(d[0].cost)})`)
+      .attr(
+        "display",
+        ([, cell]) => (-d3.polygonArea(cell) > 2000 ? null : "none") // Hide labels for small cells
+      )
+      .text((d) => d[0].name);
 
     // Updata mean values lines
     var meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
@@ -335,7 +378,7 @@ function dealersChart() {
     }
   }
 
-  // Axes helper functions
+  // Axes helpers
   const xAxis = (g, ticks) =>
     g.call(
       d3
@@ -356,7 +399,7 @@ function dealersChart() {
         .tickFormat((d) => (digitsFormat(d) === "0" ? "" : digitsFormat(d)))
     );
 
-  // Grid helper functions
+  // Grid helpers
   const xGrid = (g, ticks) =>
     g.call(
       d3
@@ -375,7 +418,7 @@ function dealersChart() {
         .tickFormat("")
     );
 
-  // Axis labels helper functions
+  // Axis labels helpers
   const xAxisLabel = (g) =>
     g
       .append("text")
@@ -401,7 +444,7 @@ function dealersChart() {
       .duration(animationTime)
       .attr("opacity", 1);
 
-  // Sector label helper function
+  // Sector label helper
   const sectorLabel = (g) =>
     g
       .append("g")
@@ -425,6 +468,18 @@ function dealersChart() {
       .transition()
       .duration(animationTime)
       .style("opacity", "1");
+
+  // Label orientaion helper
+  const orientLabel = {
+    topRight: (text) =>
+      text.attr("text-anchor", "start").attr("x", 6).attr("y", -6),
+    bottomRight: (text) =>
+      text.attr("text-anchor", "start").attr("x", 6).attr("y", 12),
+    bottomLeft: (text) =>
+      text.attr("text-anchor", "end").attr("x", -6).attr("y", 12),
+    topLeft: (text) =>
+      text.attr("text-anchor", "end").attr("x", -6).attr("y", -6),
+  };
 
   // Event handlers
   function pointClick(d) {
@@ -486,7 +541,7 @@ function dealersChart() {
     tooltip.attr("class", "tooltip").attr("style", "opacity: 0");
   }
 
-  // Calculate good ammount of ticks and endpoint for given value
+  // Calculate good ammount of ticks and endpoint for a given value
   function getSmartTicks(val) {
     // Base step between nearby two ticks
     var step = Math.pow(10, Math.trunc(val).toString().length - 1);
@@ -510,36 +565,57 @@ function dealersChart() {
 
   // Show labels that do not overlap with others
   function showLabels() {
-    let allPoints = d3.selectAll(".point");
-    let allLabels = d3.selectAll(".label");
-    let visibleLabels = d3.selectAll(".label_visible");
+    let labels = gLabels.selectAll("text:not([display=none])");
+    let points = gPoints.selectAll("path");
+    let labelsToShow = [];
 
-    allLabels.attr("class", "label").attr("opacity", "0");
+    // gLabels.selectAll("rect").remove(); // Debug
 
-    allLabels.each(function () {
-      var thisLabel = d3.select(this),
-        thisLabelBBox = this.getBBox(),
-        isOverlap = false;
+    labels.each(function () {
+      let label = d3.select(this);
+      let labelBBox = getBBox(this);
+      let overlap = false;
 
-      allPoints.each(function () {
+      // // Debug
+      // const bbRect = gLabels
+      //   .append("rect")
+      //   .attr("x", labelBBox.x - labelPadding)
+      //   .attr("y", labelBBox.y - labelPadding)
+      //   .attr("width", labelBBox.width + labelPadding * 2)
+      //   .attr("height", labelBBox.height + labelPadding * 2)
+      //   .attr("fill", "black")
+      //   .attr("opacity", 0.1);
+
+      // Check if label overlaps with other points
+      points.each(function (d) {
         if (
-          getRectsOverlap(thisLabelBBox, getBBox(this)) &&
-          !d3.select(this).classed("point_selected")
-        )
-          isOverlap = true;
+          label.datum()[0].id !== d.id &&
+          getRectsOverlap(labelBBox, getBBox(this))
+        ) {
+          overlap = true;
+        }
       });
 
-      visibleLabels.each(function () {
-        if (getRectsOverlap(thisLabelBBox, this.getBBox())) isOverlap = true;
-      });
+      // Check if label overlaps with labels we want to show
+      if (!overlap) {
+        labelsToShow.forEach(function (l) {
+          if (getRectsOverlap(labelBBox, getBBox(l))) overlap = true;
+        });
+      }
 
-      if (!isOverlap) {
-        thisLabel.attr("class", "label label_visible");
-        visibleLabels = d3.selectAll(".label_visible"); // подумать, как добавлять в выборку, а не заново выбирать
+      // Check if label overlaps with y-axis
+      if (!overlap) {
+        if (getRectsOverlap(labelBBox, getBBox(gY.node()))) overlap = true;
+      }
+
+      // Add label to array we want to show
+      if (!overlap) {
+        labelsToShow.push(this);
       }
     });
 
-    visibleLabels
+    // Show labels
+    d3.selectAll(labelsToShow)
       .transition()
       .duration(animationTime / 2)
       .attr("opacity", "1");
@@ -547,14 +623,14 @@ function dealersChart() {
 
   function getRectsOverlap(l, r) {
     l.left = l.x - labelPadding;
-    l.right = l.x + l.width + labelPadding;
+    l.right = l.x + l.width + labelPadding * 2;
     l.top = l.y - labelPadding;
-    l.bottom = l.y + l.height + labelPadding;
+    l.bottom = l.y + l.height + labelPadding * 2;
 
-    r.left = r.x - labelPadding;
-    r.right = r.x + r.width + labelPadding;
-    r.top = r.y - labelPadding;
-    r.bottom = r.y + r.height + labelPadding;
+    r.left = r.x;
+    r.right = r.x + r.width;
+    r.top = r.y;
+    r.bottom = r.y + r.height;
 
     return !(
       l.left >= r.right ||
