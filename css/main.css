@@ -129,6 +129,7 @@ a {
     box-shadow: 0 7px 15px rgba(0, 0, 0, .2);
     color: #FFF;
     opacity: 0;
+    pointer-events: none;
     transition: opacity .25s ease-out;
     }
     .tooltip__title {
@@ -166,11 +167,17 @@ a {
 .point {
     stroke: #FFF;
     stroke-width: .5;
-    cursor: pointer;
+    pointer-events: none;
     }
+.point-area {
+    fill: none;
+    cursor: pointer;
+    pointer-events: all;
+}
 .label {
     font-size: 12px;
     cursor: default;
+    pointer-events: none;
     }
 .sector text {
     font-size: 13px;

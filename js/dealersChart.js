@@ -12,7 +12,8 @@ function dealersChart() {
       bottom: 46,
       left: 50,
     },
-    labelPadding = 4,
+    labelPadding = 3,
+    hoverRadius = 10,
     animationTime = 1000;
 
   // Settings for sectors. Not accessible.
@@ -66,6 +67,7 @@ function dealersChart() {
 
   var data = [];
   var quarter = 0;
+  var defs;
   var gClouds, gX, gY, gGridX, gGridY, gMean, gLabels, gPoints, gPointsAreas;
   var tooltip, tooltipTitle, tooltipValue;
 
@@ -96,6 +98,9 @@ function dealersChart() {
       tooltip = d3.select(this).append("div").attr("class", "tooltip");
       tooltipTitle = tooltip.append("h2").attr("class", "tooltip__title");
       tooltipValue = tooltip.append("div").attr("class", "tooltip__value");
+
+      // Create defs for cliping point hover areas
+      defs = svg.append("defs");
 
       // Create group for the clouds
       // Order of the groups below is like z-index
@@ -150,22 +155,21 @@ function dealersChart() {
 
   function updateChart() {
     // Update clouds
-    sectors.forEach(function (g, i) {
-      let cloudPoints = d3.polygonHull(
-        data[quarter]
-          .filter((d) => d.sector == i)
-          .map((d) => [x(d.sales), y(d.cost)])
-      );
+    sectors.forEach(function (sector, i) {
+      let points = data[quarter]
+        .filter((d) => d.sector == i)
+        .map((d) => [x(d.sales), y(d.cost)]);
 
+      let cloudPoints = points.length > 2 ? d3.polygonHull(points) : points;
       let poly = gClouds.selectAll("#poly-" + i).data([cloudPoints]);
 
-      if (cloudPoints) {
+      if (points.length > 1) {
         poly
           .enter()
           .append("polygon")
           .attr("id", "poly-" + i)
-          .attr("fill", g.bg)
-          .attr("stroke", g.bg)
+          .attr("fill", sector.bg)
+          .attr("stroke", sector.bg)
           .attr("stroke-width", 10)
           .attr("stroke-linejoin", "round")
           .merge(poly)
@@ -188,12 +192,10 @@ function dealersChart() {
       .enter()
       .append("path")
       .attr("class", "point")
+      .attr("id", (d) => "point-" + d.id)
       .attr("transform", (d) => `translate(${x(d.sales)},${y(d.cost)})`)
       .attr("fill", (d) => color(d.sector))
       .attr("d", (d) => shape(d.sector))
-      .on("click", pointClick)
-      .on("mouseover", pointOver)
-      .on("mouseout", pointOut)
       .merge(points)
       .attr("d", (d) => shape(d.sector))
       .transition()
@@ -215,13 +217,11 @@ function dealersChart() {
       .attr("opacity", 0)
       .remove();
 
-    let delaunay = d3.Delaunay.from(
+    let voronoi = d3.Delaunay.from(
       data[quarter],
       (d) => x(d.sales),
       (d) => y(d.cost)
-    );
-
-    let voronoi = delaunay.voronoi([
+    ).voronoi([
       margin.left,
       margin.top,
       width - margin.right,
@@ -230,15 +230,18 @@ function dealersChart() {
 
     let cells = data[quarter].map((d, i) => [d, voronoi.cellPolygon(i)]);
 
-    // // Show voronoi cells and centroid angle
-    // gPointsAreas.select("path").remove();
-    // gPointsAreas
-    //   .append("path")
-    //   .attr("fill", "#dfc")
-    //   .attr("stroke", "#ccc")
-    //   .attr("d", voronoi.render());
-
+    // // Show Voronoi cells
     // gPointsAreas.select("g").remove();
+    // gPointsAreas
+    //   .append("g")
+    //   .selectAll("path")
+    //   .data(cells)
+    //   .join("path")
+    //   .attr("fill", "none")
+    //   .attr("stroke", "#ccc")
+    //   .attr("d", (d, i) => voronoi.renderCell(i));
+
+    // // Show paths from point to the center of cell
     // gPointsAreas
     //   .append("g")
     //   .attr("stroke", "orange")
@@ -250,18 +253,40 @@ function dealersChart() {
     //     ([d, cell]) => `M${d3.polygonCentroid(cell)}L${x(d.sales)},${y(d.cost)}`
     //   );
 
+    // Update point hover areas based on Voronoi cells
+    defs
+      .selectAll("clipPath")
+      .data(cells)
+      .join("clipPath")
+      .attr("id", ([d]) => "clip-" + d.id)
+      .append("path")
+      .attr("d", (d, i) => voronoi.renderCell(i));
+
+    gPointsAreas
+      .selectAll("circle")
+      .data(data[quarter])
+      .join("circle")
+      .attr("class", "point-area")
+      .attr("clip-path", (d) => "url(#clip-" + d.id)
+      .attr("cx", (d) => x(d.sales))
+      .attr("cy", (d) => y(d.cost))
+      .attr("r", hoverRadius)
+      .on("click", pointClick)
+      .on("mouseover", pointOver)
+      .on("mouseout", pointOut);
+
     // Add labels based on Voronoi cells
     gLabels
       .selectAll("text")
-      .data(cells, (d) => d[0].id)
+      .data(cells, ([d]) => d.id)
       .join("text")
       .attr("class", "label")
       .attr("opacity", 0)
-      .each(function (d) {
+      .each(function ([d, cell]) {
         // Orient label based on direction from point to ceneter of the Voronoi cell
-        const px = x(d[0].sales);
-        const py = y(d[0].cost);
-        const [cx, cy] = d3.polygonCentroid(d[1]);
+        const px = x(d.sales);
+        const py = y(d.cost);
+        const [cx, cy] = d3.polygonCentroid(cell);
 
         let angle = (Math.atan2(cy - py, cx - px) * 180) / Math.PI + 90;
         if (angle < 0) angle += 360;
@@ -276,12 +301,12 @@ function dealersChart() {
             : orientLabel.topLeft
         );
       })
-      .attr("transform", (d) => `translate(${x(d[0].sales)},${y(d[0].cost)})`)
+      .attr("transform", ([d]) => `translate(${x(d.sales)},${y(d.cost)})`)
       .attr(
         "display",
         ([, cell]) => (-d3.polygonArea(cell) > 2000 ? null : "none") // Hide labels for small cells
       )
-      .text((d) => d[0].name);
+      .text(([d]) => d.name);
 
     // Updata mean values lines
     let meanX = gMean.selectAll(".mean-x").data([data[quarter].meanSales]);
@@ -515,8 +540,8 @@ function dealersChart() {
 
   // Event handlers
   function pointClick(d) {
-    var point = d3.select(this),
-      position = "translate(" + x(d.sales) + "," + y(d.cost) + ")";
+    const point = d3.select("#point-" + d.id);
+    const position = `translate(${x(d.sales)}, ${y(d.cost)})`;
 
     if (point.classed("point_selected"))
       point.attr("transform", position).attr("class", "point");
@@ -527,16 +552,19 @@ function dealersChart() {
   }
 
   function pointOver(d) {
-    tooltip.attr(
-      "style",
-      `left: ${x(d.sales)}px; top: ${y(d.cost)}px; opacity: 1`
-    );
+    const point = d3.select("#point-" + d.id);
+    const px = x(d.sales);
+    const py = y(d.cost);
+    const position = `translate(${px}, ${py})`;
 
+    if (!point.classed("point_selected"))
+      point.attr("transform", position + "scale(1.4)");
+
+    tooltip.attr("style", `left: ${px + 5}px; top: ${py + 5}px; opacity: 1`);
     tooltipTitle.text(d.name);
-
     tooltipValue.html(`<dl class="props">
       <dt class="props__title">Стоимость продажи</dt><dd class="props__value">${digitsFormat(
-        d.cost - margin.right
+        d.cost
       )} ₽</dd>
       <dt class="props__title">Количество продаж</dt><dd class="props__value">${
         d.sales
@@ -545,7 +573,16 @@ function dealersChart() {
   }
 
   function pointOut(d) {
-    tooltip.attr("style", "opacity: 0");
+    const point = d3.select("#point-" + d.id);
+    const px = x(d.sales);
+    const py = y(d.cost);
+    const position = `translate(${px}, ${py})`;
+
+    if (point.classed("point_selected"))
+      point.attr("transform", position + "scale(2)");
+    else point.attr("transform", position).attr("class", "point");
+
+    tooltip.attr("style", `left: ${px + 5}px; top: ${py + 5}px; opacity: 0`);
   }
 
   function meanXOver(d) {
@@ -561,8 +598,8 @@ function dealersChart() {
       .attr("class", "tooltip tooltip_compact")
       .attr(
         "style",
-        `left: auto; right: ${margin.right + 10}px; top: ${
-          y(d) + 5
+        `left: auto; right: ${margin.right + 30}px; top: ${
+          y(d) - 15
         }px; opacity: 1`
       );
 
@@ -608,7 +645,7 @@ function dealersChart() {
       let labelBBox = getBBox(this);
       let overlap = false;
 
-      // // Debug
+      // // Show bboxes
       // const bbRect = gLabels
       //   .append("rect")
       //   .attr("x", labelBBox.x - labelPadding)
@@ -788,6 +825,12 @@ function dealersChart() {
   chart.labelPadding = function (value) {
     if (!arguments.length) return labelPadding;
     labelPadding = value;
+    return chart;
+  };
+
+  chart.hoverRadius = function (value) {
+    if (!arguments.length) return hoverRadius;
+    hoverRadius = value;
     return chart;
   };
 

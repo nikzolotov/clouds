@@ -56,7 +56,7 @@ Promise.all([
         quarters.selectAll(".tabs__link").attr("class", "tabs__link");
         thisLink.attr("class", "tabs__link tabs__link_selected");
 
-        // Just pass new quarter
+        // Pass quarter index and switch quarter
         chart.switchQuarter(i);
       }
 
