@@ -230,8 +230,8 @@ function dealersChart() {
 
     let cells = data[quarter].map((d, i) => [d, voronoi.cellPolygon(i)]);
 
-    // // Show Voronoi cells
-    // gPointsAreas.select("g").remove();
+    // Show Voronoi cells
+    // gPointsAreas.selectAll("g").remove();
     // gPointsAreas
     //   .append("g")
     //   .selectAll("path")
